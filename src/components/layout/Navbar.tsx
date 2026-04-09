@@ -83,13 +83,13 @@ export function Navbar() {
           </Link>
 
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${MOCK_USER.name}`} />
-                  <AvatarFallback>{MOCK_USER.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-              </Button>
+            <DropdownMenuTrigger 
+              render={<Button variant="ghost" size="icon" className="rounded-full" />}
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${MOCK_USER.name}`} />
+                <AvatarFallback>{MOCK_USER.name.charAt(0)}</AvatarFallback>
+              </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
@@ -126,10 +126,10 @@ export function Navbar() {
           </DropdownMenu>
 
           <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
+            <SheetTrigger 
+              render={<Button variant="ghost" size="icon" className="md:hidden" />}
+            >
+              <Menu className="h-5 w-5" />
             </SheetTrigger>
             <SheetContent side="right">
               <div className="flex flex-col gap-4 mt-8">

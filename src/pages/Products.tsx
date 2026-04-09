@@ -112,11 +112,11 @@ export function Products() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      Sort by: {sortBy}
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
+                  <DropdownMenuTrigger 
+                    render={<Button variant="outline" size="sm" className="gap-2" />}
+                  >
+                    Sort by: {sortBy}
+                    <ChevronDown className="h-4 w-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem onClick={() => setSortBy('Featured')}>Featured</DropdownMenuItem>
