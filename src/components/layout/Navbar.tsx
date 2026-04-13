@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Search, User, Menu, X, Heart, LogOut, Settings, Package, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, Search, User, Menu, X, Heart, LogOut, Settings, Package, LayoutDashboard, LogIn } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,14 +14,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { MOCK_USER } from '@/lib/mockData';
-import { UserRole } from '@/types';
+import { useAuth } from '@/lib/AuthContext';
+import { loginWithGoogle, logout } from '@/lib/firebase';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [cartCount, setCartCount] = useState(3);
+  const [cartCount, setCartCount] = useState(0);
   const navigate = useNavigate();
-  const [userRole, setUserRole] = useState<UserRole>(MOCK_USER.role);
+  const { user, firebaseUser, loading } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -30,6 +30,23 @@ export function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const handleLogin = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      console.error('Login failed:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <nav
@@ -82,48 +99,60 @@ export function Navbar() {
             </Button>
           </Link>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger 
-              render={<Button variant="ghost" size="icon" className="rounded-full" />}
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${MOCK_USER.name}`} />
-                <AvatarFallback>{MOCK_USER.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <div className="flex flex-col">
-                  <span>{MOCK_USER.name}</span>
-                  <span className="text-xs text-muted-foreground font-normal">{MOCK_USER.email}</span>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/profile')}>
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/orders')}>
-                <Package className="mr-2 h-4 w-4" />
-                Orders
-              </DropdownMenuItem>
-              {userRole === 'ADMIN' || userRole === 'VENDOR' ? (
-                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Dashboard
+          {firebaseUser ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger 
+                render={<Button variant="ghost" size="icon" className="rounded-full" />}
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`} />
+                  <AvatarFallback>{firebaseUser.displayName?.charAt(0) || 'U'}</AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col">
+                    <span>{user?.name || firebaseUser.displayName}</span>
+                    <span className="text-xs text-muted-foreground font-normal">{firebaseUser.email}</span>
+                    {user?.role && (
+                      <Badge variant="outline" className="w-fit mt-1 text-[10px] py-0 h-4">
+                        {user.role}
+                      </Badge>
+                    )}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
                 </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={() => navigate('/orders')}>
+                  <Package className="mr-2 h-4 w-4" />
+                  Orders
+                </DropdownMenuItem>
+                {user?.role === 'ADMIN' || user?.role === 'VENDOR' ? (
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Dashboard
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button onClick={handleLogin} className="gap-2 rounded-full">
+              <LogIn className="h-4 w-4" />
+              <span className="hidden sm:inline">Login</span>
+            </Button>
+          )}
 
           <Sheet>
             <SheetTrigger 
@@ -137,15 +166,9 @@ export function Navbar() {
                 <Link to="/categories" className="text-lg font-medium">Categories</Link>
                 <Link to="/deals" className="text-lg font-medium">Deals</Link>
                 <Link to="/wishlist" className="text-lg font-medium">Wishlist</Link>
-                <DropdownMenuSeparator />
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-muted-foreground">Demo Role Switcher</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setUserRole('CUSTOMER')}>Customer</Button>
-                    <Button variant="outline" size="sm" onClick={() => setUserRole('VENDOR')}>Vendor</Button>
-                    <Button variant="outline" size="sm" onClick={() => setUserRole('ADMIN')}>Admin</Button>
-                  </div>
-                </div>
+                {!firebaseUser && (
+                  <Button onClick={handleLogin} className="mt-4">Login</Button>
+                )}
               </div>
             </SheetContent>
           </Sheet>

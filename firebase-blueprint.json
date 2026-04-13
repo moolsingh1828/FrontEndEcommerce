@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Base user profile for all roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "CUSTOMER", "VENDOR"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "companyName": { "type": "string", "description": "Only for VENDOR role" }
+      },
+      "required": ["uid", "name", "email", "role", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category",
+      "type": "object",
+      "properties": {
+        "Cname": { "type": "string" },
+        "parentCategoryID": { "type": "string", "description": "Reference to parent category ID" }
+      },
+      "required": ["Cname"]
+    },
+    "Brand": {
+      "title": "Brand",
+      "description": "Product brand",
+      "type": "object",
+      "properties": {
+        "bName": { "type": "string" }
+      },
+      "required": ["bName"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "E-commerce product",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "basePrice": { "type": "number" },
+        "brandID": { "type": "string" },
+        "categoryID": { "type": "string" },
+        "createdBy": { "type": "string", "description": "Vendor UID" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string", "format": "uri" }
+      },
+      "required": ["name", "description", "basePrice", "createdBy", "createdAt"]
+    },
+    "ProductVariant": {
+      "title": "ProductVariant",
+      "description": "Variant of a product (size, color, etc)",
+      "type": "object",
+      "properties": {
+        "productID": { "type": "string" },
+        "sku": { "type": "string" },
+        "size": { "type": "string" },
+        "color": { "type": "string" },
+        "material": { "type": "string" },
+        "price": { "type": "number" }
+      },
+      "required": ["productID", "sku", "price"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer review for a product",
+      "type": "object",
+      "properties": {
+        "customerID": { "type": "string" },
+        "customerName": { "type": "string" },
+        "productID": { "type": "string" },
+        "reviewText": { "type": "string" },
+        "rating": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerID", "productID", "reviewText", "rating", "createdAt"]
+    },
+    "CartItem": {
+      "title": "CartItem",
+      "description": "Item in a user's cart",
+      "type": "object",
+      "properties": {
+        "productID": { "type": "string" },
+        "variantID": { "type": "string" },
+        "quantity": { "type": "number" },
+        "addedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productID", "quantity", "addedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order",
+      "type": "object",
+      "properties": {
+        "customerID": { "type": "string" },
+        "total_amount": { "type": "number" },
+        "order_status": { "type": "string", "enum": ["pending", "confirmed", "shipped", "delivered", "cancelled"] },
+        "order_date": { "type": "string", "format": "date-time" },
+        "items": { "type": "array", "items": { "$ref": "OrderItem" } }
+      },
+      "required": ["customerID", "total_amount", "order_status", "order_date"]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "Item within an order",
+      "type": "object",
+      "properties": {
+        "productID": { "type": "string" },
+        "variantID": { "type": "string" },
+        "productName": { "type": "string" },
+        "sku": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit_price": { "type": "number" }
+      },
+      "required": ["productName", "sku", "quantity", "unit_price"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/categories/{categoryId}": { "schema": "Category", "description": "Product categories" },
+    "/brands/{brandId}": { "schema": "Brand", "description": "Product brands" },
+    "/products/{productId}": { "schema": "Product", "description": "Product catalog" },
+    "/products/{productId}/variants/{variantId}": { "schema": "ProductVariant", "description": "Product variants" },
+    "/products/{productId}/reviews/{reviewId}": { "schema": "Review", "description": "Product reviews" },
+    "/users/{uid}/cart/{itemId}": { "schema": "CartItem", "description": "User shopping cart" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Customer orders" }
+  }
+}

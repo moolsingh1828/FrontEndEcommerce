@@ -1,12 +1,48 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Zap, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ProductCard } from '@/components/ecommerce/ProductCard';
-import { MOCK_PRODUCTS, MOCK_CATEGORIES } from '@/lib/mockData';
+import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { Product, Category } from '@/types';
 
 export function Home() {
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const productsQuery = query(
+      collection(db, 'products'),
+      orderBy('createdAt', 'desc'),
+      limit(8)
+    );
+
+    const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
+      const prods = snapshot.docs.map(doc => ({ ...doc.data(), productID: doc.id } as unknown as Product));
+      setFeaturedProducts(prods);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'products');
+    });
+
+    const categoriesQuery = query(collection(db, 'categories'), limit(4));
+    const unsubscribeCategories = onSnapshot(categoriesQuery, (snapshot) => {
+      const cats = snapshot.docs.map(doc => ({ ...doc.data(), categoryID: doc.id } as unknown as Category));
+      setCategories(cats);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'categories');
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCategories();
+    };
+  }, []);
+
   return (
     <div className="flex flex-col gap-20 pb-20">
       {/* Hero Section */}
@@ -31,9 +67,11 @@ export function Home() {
               Premium products, lightning-fast delivery, and curated collections.
             </p>
             <div className="flex items-center gap-4 mt-4">
-              <Button size="lg" className="rounded-full px-8 h-14 text-lg">
-                Shop Now
-              </Button>
+              <Link to="/products">
+                <Button size="lg" className="rounded-full px-8 h-14 text-lg">
+                  Shop Now
+                </Button>
+              </Link>
               <Button variant="outline" size="lg" className="rounded-full px-8 h-14 text-lg gap-2">
                 View Collections
                 <ArrowRight className="h-5 w-5" />
@@ -113,30 +151,38 @@ export function Home() {
             <h2 className="text-4xl font-bold tracking-tight">Shop by Category</h2>
             <p className="text-muted-foreground mt-2">Explore our wide range of collections</p>
           </div>
-          <Button variant="ghost" className="gap-2">
-            View All <ArrowRight className="h-4 w-4" />
-          </Button>
+          <Link to="/products">
+            <Button variant="ghost" className="gap-2">
+              View All <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
         </div>
         
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {MOCK_CATEGORIES.filter(c => !c.parentCategoryID).slice(0, 4).map((category, idx) => (
-            <Link 
-              key={category.categoryID} 
-              to={`/products?category=${category.categoryID}`}
-              className="group relative aspect-[4/5] rounded-3xl overflow-hidden bg-muted"
-            >
-              <img 
-                src={`https://picsum.photos/seed/cat-${idx}/600/800`} 
-                alt={category.Cname} 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
-                <h3 className="text-2xl font-bold text-white">{category.Cname}</h3>
-                <p className="text-white/60 text-sm">Explore Collection</p>
-              </div>
-            </Link>
-          ))}
+          {categories.length > 0 ? (
+            categories.map((category, idx) => (
+              <Link 
+                key={category.categoryID} 
+                to={`/products?category=${category.categoryID}`}
+                className="group relative aspect-[4/5] rounded-3xl overflow-hidden bg-muted"
+              >
+                <img 
+                  src={`https://picsum.photos/seed/cat-${idx}/600/800`} 
+                  alt={category.Cname} 
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 flex flex-col justify-end">
+                  <h3 className="text-2xl font-bold text-white">{category.Cname}</h3>
+                  <p className="text-white/60 text-sm">Explore Collection</p>
+                </div>
+              </Link>
+            ))
+          ) : (
+            [1, 2, 3, 4].map((i) => (
+              <div key={i} className="aspect-[4/5] rounded-3xl bg-muted animate-pulse" />
+            ))
+          )}
         </div>
       </section>
 
@@ -155,11 +201,17 @@ export function Home() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-          {MOCK_PRODUCTS.map(product => (
-            <div key={product.productID}>
-              <ProductCard product={product} />
-            </div>
-          ))}
+          {featuredProducts.length > 0 ? (
+            featuredProducts.map(product => (
+              <div key={product.productID}>
+                <ProductCard product={product} />
+              </div>
+            ))
+          ) : (
+            [1, 2, 3, 4].map((i) => (
+              <div key={i} className="aspect-[3/4] rounded-3xl bg-muted animate-pulse" />
+            ))
+          )}
         </div>
       </section>
 

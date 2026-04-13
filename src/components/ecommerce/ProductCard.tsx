@@ -1,16 +1,56 @@
 import { ShoppingCart, Heart, Star } from 'lucide-react';
 import { motion } from 'motion/react';
+import React from 'react';
 import { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
+import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { useAuth } from '@/lib/AuthContext';
 
 interface ProductCardProps {
   product: Product;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const { firebaseUser } = useAuth();
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!firebaseUser) {
+      alert('Please login to add items to cart');
+      return;
+    }
+
+    try {
+      const cartRef = collection(db, 'users', firebaseUser.uid, 'cart');
+      const q = query(cartRef, where('productID', '==', product.productID));
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        // Update existing item
+        const cartItemDoc = querySnapshot.docs[0];
+        await updateDoc(doc(db, 'users', firebaseUser.uid, 'cart', cartItemDoc.id), {
+          quantity: cartItemDoc.data().quantity + 1
+        });
+      } else {
+        // Add new item
+        await addDoc(cartRef, {
+          productID: product.productID,
+          quantity: 1,
+          addedAt: new Date().toISOString()
+        });
+      }
+      alert('Added to cart!');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${firebaseUser.uid}/cart`);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -66,7 +106,7 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="text-xl font-bold">
             ${product.basePrice.toLocaleString()}
           </p>
-          <Button size="sm" className="rounded-full gap-2">
+          <Button size="sm" className="rounded-full gap-2" onClick={handleAddToCart}>
             <ShoppingCart className="h-4 w-4" />
             Add
           </Button>

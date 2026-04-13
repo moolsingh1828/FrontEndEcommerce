@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required, 1-100 chars)
+    //   - email: string (required, email format)
+    //   - phone: string (optional)
+    //   - role: string (required, one of ['ADMIN', 'CUSTOMER', 'VENDOR'])
+    //   - createdAt: string (required, ISO 8601)
+    //   - companyName: string (optional, for VENDOR)
+    //
+    // Collection: products
+    // Document ID: {productId}
+    // Fields:
+    //   - name: string (required, 1-200 chars)
+    //   - description: string (required, 1-2000 chars)
+    //   - basePrice: number (required, positive)
+    //   - brandID: string (optional)
+    //   - categoryID: string (optional)
+    //   - createdBy: string (required, vendor uid)
+    //   - createdAt: string (required, ISO 8601)
+    //   - imageUrl: string (optional, URL)
+    //
+    // Subcollection: products/{productId}/variants
+    // Fields:
+    //   - productID: string (required)
+    //   - sku: string (required)
+    //   - size: string (optional)
+    //   - color: string (optional)
+    //   - material: string (optional)
+    //   - price: number (required, positive)
+    //
+    // Subcollection: products/{productId}/reviews
+    // Fields:
+    //   - customerID: string (required)
+    //   - customerName: string (required)
+    //   - productID: string (required)
+    //   - reviewText: string (required, 1-1000 chars)
+    //   - rating: number (required, 1-5)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: categories
+    // Fields:
+    //   - Cname: string (required)
+    //   - parentCategoryID: string (optional)
+    //
+    // Collection: brands
+    // Fields:
+    //   - bName: string (required)
+    //
+    // Collection: orders
+    // Fields:
+    //   - customerID: string (required)
+    //   - total_amount: number (required, positive)
+    //   - order_status: string (required, enum)
+    //   - order_date: string (required, ISO 8601)
+    //   - items: list (required, order items)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+         (request.auth.token.email == "moolsinghmsimsi@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isVendor() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'VENDOR';
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['ADMIN', 'CUSTOMER', 'VENDOR'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'description', 'basePrice', 'createdBy', 'createdAt']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+             data.basePrice is number && data.basePrice > 0 &&
+             data.createdBy == request.auth.uid &&
+             isValidDateString(data.createdAt) &&
+             (!('imageUrl' in data) || isValidUrl(data.imageUrl));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.resource.data.role != 'ADMIN' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role;
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isVendor() && isValidProduct(request.resource.data);
+      allow update: if (isVendor() && resource.data.createdBy == request.auth.uid && isValidProduct(request.resource.data)) || isAdmin();
+      allow delete: if (isVendor() && resource.data.createdBy == request.auth.uid) || isAdmin();
+
+      match /variants/{variantId} {
+        allow read: if true;
+        allow write: if (isVendor() && get(/databases/$(database)/documents/products/$(productId)).data.createdBy == request.auth.uid) || isAdmin();
+      }
+
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && request.resource.data.customerID == request.auth.uid;
+        allow delete: if isOwner(resource.data.customerID) || isAdmin();
+      }
+    }
+
+    match /users/{userId}/cart/{itemId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.customerID == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.customerID == request.auth.uid;
+      allow update: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

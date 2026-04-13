@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, SlidersHorizontal, ChevronDown, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,20 +11,62 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ProductCard } from '@/components/ecommerce/ProductCard';
-import { MOCK_PRODUCTS, MOCK_CATEGORIES, MOCK_BRANDS } from '@/lib/mockData';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { Product, Category, Brand } from '@/types';
 
 export function Products() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [loading, setLoading] = useState(true);
+  
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState('Featured');
 
-  const filteredProducts = MOCK_PRODUCTS.filter(product => {
+  useEffect(() => {
+    const productsQuery = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+    const unsubscribeProducts = onSnapshot(productsQuery, (snapshot) => {
+      const prods = snapshot.docs.map(doc => ({ ...doc.data(), productID: doc.id } as unknown as Product));
+      setProducts(prods);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'products');
+    });
+
+    const unsubscribeCategories = onSnapshot(collection(db, 'categories'), (snapshot) => {
+      const cats = snapshot.docs.map(doc => ({ ...doc.data(), categoryID: doc.id } as unknown as Category));
+      setCategories(cats);
+    });
+
+    const unsubscribeBrands = onSnapshot(collection(db, 'brands'), (snapshot) => {
+      const brs = snapshot.docs.map(doc => ({ ...doc.data(), brandID: doc.id } as unknown as Brand));
+      setBrands(brs);
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCategories();
+      unsubscribeBrands();
+    };
+  }, []);
+
+  const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory ? product.categoryID === selectedCategory : true;
     const matchesBrand = selectedBrand ? product.brandID === selectedBrand : true;
     return matchesSearch && matchesCategory && matchesBrand;
   });
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 pt-28 pb-20 flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 pt-28 pb-20">
@@ -66,11 +108,11 @@ export function Products() {
                 >
                   All Categories
                 </button>
-                {MOCK_CATEGORIES.filter(c => !c.parentCategoryID).map(category => (
+                {categories.filter(c => !c.parentCategoryID).map(category => (
                   <button 
                     key={category.categoryID}
-                    onClick={() => setSelectedCategory(category.categoryID)}
-                    className={`text-sm text-left px-2 py-1.5 rounded-md transition-colors ${selectedCategory === category.categoryID ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-muted'}`}
+                    onClick={() => setSelectedCategory(String(category.categoryID))}
+                    className={`text-sm text-left px-2 py-1.5 rounded-md transition-colors ${selectedCategory === String(category.categoryID) ? 'bg-primary text-primary-foreground font-medium' : 'hover:bg-muted'}`}
                   >
                     {category.Cname}
                   </button>
@@ -81,12 +123,12 @@ export function Products() {
             <div>
               <h3 className="font-bold mb-4">Brands</h3>
               <div className="flex flex-wrap gap-2">
-                {MOCK_BRANDS.map(brand => (
+                {brands.map(brand => (
                   <Badge 
                     key={brand.brandID}
-                    variant={selectedBrand === brand.brandID ? 'default' : 'outline'}
+                    variant={selectedBrand === String(brand.brandID) ? 'default' : 'outline'}
                     className="cursor-pointer px-3 py-1"
-                    onClick={() => setSelectedBrand(selectedBrand === brand.brandID ? null : brand.brandID)}
+                    onClick={() => setSelectedBrand(selectedBrand === String(brand.brandID) ? null : String(brand.brandID))}
                   >
                     {brand.bName}
                   </Badge>

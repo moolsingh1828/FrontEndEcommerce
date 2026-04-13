@@ -1,20 +1,91 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ShoppingCart, Heart, Star, ShieldCheck, Truck, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ShoppingCart, Heart, Star, ShieldCheck, Truck, RotateCcw, ChevronRight, Minus, Plus, Share2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MOCK_PRODUCTS, MOCK_VARIANTS, MOCK_REVIEWS } from '@/lib/mockData';
+import { ProductCard } from '@/components/ecommerce/ProductCard';
+import { doc, onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { Product, Review, ProductVariant } from '@/types';
 
 export function ProductDetail() {
   const { id } = useParams();
-  const product = MOCK_PRODUCTS.find(p => p.productID === Number(id));
-  const variants = MOCK_VARIANTS.filter(v => v.productID === Number(id));
-  const [selectedVariant, setSelectedVariant] = useState(variants[0] || null);
+  const navigate = useNavigate();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    if (!id) return;
+
+    setLoading(true);
+    const unsubscribeProduct = onSnapshot(doc(db, 'products', id), (docSnap) => {
+      if (docSnap.exists()) {
+        setProduct({ ...docSnap.data(), productID: docSnap.id } as unknown as Product);
+      } else {
+        setProduct(null);
+      }
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `products/${id}`);
+      setLoading(false);
+    });
+
+    const variantsQuery = query(collection(db, 'products', id, 'variants'));
+    const unsubscribeVariants = onSnapshot(variantsQuery, (snapshot) => {
+      const vars = snapshot.docs.map(doc => ({ ...doc.data(), variantID: doc.id } as unknown as ProductVariant));
+      setVariants(vars);
+      if (vars.length > 0) setSelectedVariant(vars[0]);
+    });
+
+    const reviewsQuery = query(
+      collection(db, 'products', id, 'reviews'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribeReviews = onSnapshot(reviewsQuery, (snapshot) => {
+      const revs = snapshot.docs.map(doc => ({ ...doc.data(), reviewID: doc.id } as unknown as Review));
+      setReviews(revs);
+    });
+
+    return () => {
+      unsubscribeProduct();
+      unsubscribeVariants();
+      unsubscribeReviews();
+    };
+  }, [id]);
+
+  useEffect(() => {
+    if (product?.categoryID) {
+      const relatedQuery = query(
+        collection(db, 'products'),
+        where('categoryID', '==', product.categoryID),
+        limit(4)
+      );
+      const unsubscribeRelated = onSnapshot(relatedQuery, (snapshot) => {
+        const prods = snapshot.docs
+          .map(doc => ({ ...doc.data(), productID: doc.id } as unknown as Product))
+          .filter(p => String(p.productID) !== String(id));
+        setRelatedProducts(prods);
+      });
+      return () => unsubscribeRelated();
+    }
+  }, [product, id]);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 pt-28 pb-20 flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -75,7 +146,7 @@ export function ProductDetail() {
               <div className="flex items-center gap-1">
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                 <span className="font-bold">4.8</span>
-                <span className="text-muted-foreground text-sm">(128 Reviews)</span>
+                <span className="text-muted-foreground text-sm">({reviews.length} Reviews)</span>
               </div>
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tight">{product.name}</h1>
@@ -183,14 +254,18 @@ export function ProductDetail() {
               value="reviews" 
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-4 text-lg font-bold"
             >
-              Reviews ({MOCK_REVIEWS.length})
+              Reviews ({reviews.length})
             </TabsTrigger>
           </TabsList>
           <TabsContent value="description" className="py-10">
             <div className="max-w-3xl flex flex-col gap-6">
               <h3 className="text-2xl font-bold">Product Overview</h3>
               <p className="text-muted-foreground leading-relaxed">
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                Experience the pinnacle of craftsmanship with the {product.name}. 
+                Every detail has been meticulously engineered to provide you with 
+                unparalleled performance and style. Whether you're using it for 
+                professional work or everyday tasks, this product delivers 
+                consistency and reliability.
               </p>
               <ul className="list-disc pl-5 text-muted-foreground flex flex-col gap-2">
                 <li>Premium quality materials and construction</li>
@@ -227,31 +302,49 @@ export function ProductDetail() {
                 <Button>Write a Review</Button>
               </div>
               <div className="grid gap-6">
-                {MOCK_REVIEWS.map((review) => (
-                  <div key={review.reviewID} className="flex gap-4 p-6 rounded-2xl bg-muted/30">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${review.customerName}`} />
-                      <AvatarFallback>{review.customerName?.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold">{review.customerName}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span>
+                {reviews.length > 0 ? (
+                  reviews.map((review) => (
+                    <div key={review.reviewID} className="flex gap-4 p-6 rounded-2xl bg-muted/30">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${review.customerID}`} />
+                        <AvatarFallback>U</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col gap-2 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold">{review.customerName || 'Verified Buyer'}</span>
+                          <span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className={`h-3 w-3 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted'}`} />
+                          ))}
+                        </div>
+                        <p className="text-muted-foreground mt-2">{review.reviewText}</p>
                       </div>
-                      <div className="flex gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`h-3 w-3 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted'}`} />
-                        ))}
-                      </div>
-                      <p className="text-muted-foreground mt-2">{review.reviewText}</p>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    No reviews yet. Be the first to review this product!
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Related Products */}
+      {relatedProducts.length > 0 && (
+        <div className="mt-20">
+          <h2 className="text-3xl font-bold mb-10">You May Also Like</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {relatedProducts.map(prod => (
+              <ProductCard key={String(prod.productID)} product={prod} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
